@@ -77,7 +77,7 @@ zelthy-initium Code Review Guidelines
     - No hardcoded user details (e.g., user_id, email) in the database.
     - Avoid excessive concurrent requests in HTML (e.g., for dashboards); optimize with delays or scroll-based triggers.
 
-  Review Format (will be given only if required)
+  Review Format
     - Bug Report (if applicable) – List any bugs and their fixes.
     - Performance Optimizations (if applicable) – Suggested improvements.
 
