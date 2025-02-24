@@ -39,7 +39,7 @@ FileContent (optional, will not be provided for large files): <content>
 
 
 
-you must go through the path and return a review (if absolutely required) in the following format
+you must go through the patch and FileContent (if provided) and return a review (if absolutely required) in the following format
 
 review: <review>
 position: the position (line number, must never be less than 1) from which a code change is required
@@ -102,7 +102,8 @@ export const GetPrSummaryPrompt = `
 
   # Changes introduced by Pull request
 
-  <Filename>: <Change Summary>
+  - <Filename>: <Change Summary> (change summary must not be more than 2 lines)
+  - <Filename>: <Change Summry>
 `;
 
 export const GetCommitReviewSummaryPrompt = `
@@ -119,4 +120,6 @@ export const GetCommitReviewSummaryPrompt = `
   # Changes introduced by commit
 
   <summary of changes>
+
+  Note: Make sure to break down the summary into paragraphs based on the files and keep it concise
 `;
