@@ -191,7 +191,7 @@ export const robot = (app: Probot) => {
         }
         try {
           const res = await chat?.fileReview(patch, file.filename, repo.owner, repo.repo, pull_request.head.ref);
-          if (!!res) {
+          if (!!res && res.review !== "") {
             fileReviews.push({
               path: file.filename,
               body: res.review,
