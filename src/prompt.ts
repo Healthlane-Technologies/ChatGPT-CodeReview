@@ -32,7 +32,12 @@ The structure of a zelthy-initium app looks like this
 
 You will receive the filename and the patch in the following format
 
-Filename: <filename> Patch: <patch>
+Filename: <filename>
+Patch: <patch>
+FileContent (optional, will not be provided for large files): <content>
+
+
+
 
 you must go through the path and return a review (if absolutely required) in the following format
 

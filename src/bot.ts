@@ -12,7 +12,7 @@ const MAX_PATCH_COUNT = process.env.MAX_PATCH_LENGTH
 export const robot = (app: Probot) => {
   const loadChat = async (context: Context) => {
     if (process.env.OPENAI_API_KEY) {
-      return new Chat(process.env.OPENAI_API_KEY);
+      return new Chat(process.env.OPENAI_API_KEY, context.octokit);
     }
 
     const repo = context.repo();
@@ -31,7 +31,7 @@ export const robot = (app: Probot) => {
         return null;
       }
 
-      return new Chat(data.value);
+      return new Chat(data.value, context.octokit);
     } catch {
       await context.octokit.issues.createComment({
         repo: repo.repo,
@@ -158,11 +158,21 @@ export const robot = (app: Probot) => {
       const fileReviews = [];
       const prSummary = await chat?.getPRSummary(combinedChanges);
 
+      const { data: prDetails } = await context.octokit.pulls.get({
+        owner: repo.owner,
+        repo: repo.repo,
+        pull_number: pull_request.number
+      })
+
+      let currentPRDescription = prDetails.body || "";
+
+      let updatedPRDescription = updatePRDescriptionWithSummary(currentPRDescription, prSummary);
+
       await context.octokit.pulls.update({
         owner: repo.owner,
         repo: repo.repo,
         pull_number: pull_request.number,
-        body: prSummary
+        body: updatedPRDescription
       });
 
       for (let i = 0; i < changedFiles.length; i++) {
@@ -180,7 +190,7 @@ export const robot = (app: Probot) => {
           continue;
         }
         try {
-          const res = await chat?.fileReview(patch, file.filename);
+          const res = await chat?.fileReview(patch, file.filename, repo.owner, repo.repo, pull_request.head.ref);
           if (!!res) {
             fileReviews.push({
               path: file.filename,
@@ -238,4 +248,24 @@ const matchPatterns = (patterns: string[], path: string) => {
       }
     }
   })
+}
+
+function updatePRDescriptionWithSummary(original: string, newText: string, fence: string = "---"): string {
+
+    // Escape special regex characters in fence
+    const escapedFence = fence.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const fenceRegex = new RegExp(`${escapedFence}\\n([\\s\\S]*?)\\n${escapedFence}`, 'm');
+
+    // Normalize line endings
+    const normalizedOriginal = original.replace(/\r\n/g, '\n');
+    const normalizedNewText = newText.replace(/\r\n/g, '\n');
+
+    if (fenceRegex.test(normalizedOriginal)) {
+        // Replace existing fenced content
+        return normalizedOriginal.replace(fenceRegex, `${fence}\n${normalizedNewText}\n${fence}`);
+    } else {
+        // If original text doesn't end with newline, add one before fence
+        const separator = normalizedOriginal.endsWith('\n') ? '' : '\n';
+        return `${normalizedOriginal}${separator}${fence}\n${normalizedNewText}\n${fence}`;
+    }
 }
