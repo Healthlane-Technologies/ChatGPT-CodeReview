@@ -2,19 +2,22 @@ import { OpenAI, AzureOpenAI } from 'openai';
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { FileReviewPrompt, GetPrSummaryPrompt, GetCommitReviewSummaryPrompt } from './prompt';
+import { ProbotOctokit } from 'probot';
 
 const FileReviewResponse = z.object({
   review: z.string(),
   position: z.number().int(),
 });
 
+
 type FileReviewType = z.infer<typeof FileReviewResponse>;
 
 export class Chat {
   private openai: OpenAI | AzureOpenAI;
   private isAzure: boolean;
+  private octokit: InstanceType<typeof ProbotOctokit>;
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, octokit: InstanceType<typeof ProbotOctokit>) {
     if (!apiKey) {
       throw new Error('API key is required');
     }
@@ -39,9 +42,28 @@ export class Chat {
         baseURL: process.env.OPENAI_API_ENDPOINT || 'https://api.openai.com/v1',
       });
     }
+
+    this.octokit = octokit;
   }
 
-  private generateFileReviewUserPrompt(patch: string, filename: string): string {
+  private async generateFileReviewUserPrompt(patch: string, filename: string, repoOwner: string, repo: string, branch: string): Promise<string> {
+    const fileContent = await this.getFileFromRepo(filename, repoOwner, repo, branch);
+
+    if (fileContent !== "" || fileContent.split("\n").length < 300) {
+      return `
+        Filename: ${filename}
+        Patch:
+        \`\`\`
+        ${patch}
+        \`\`\`
+
+        FileContent:
+        \`\`\`
+        ${fileContent}
+        \`\`\``
+        ;
+    }
+
     return `
       Filename: ${filename}
       Patch:
@@ -54,14 +76,14 @@ export class Chat {
     return changedFiles;
   }
 
-  public async fileReview(patch: string, filename: string): Promise<FileReviewType | null> {
+  public async fileReview(patch: string, filename: string,  repoOwner: string, repo: string, branch: string ): Promise<FileReviewType | null> {
     if (!patch || !filename) {
       throw new Error('Patch and filename are required');
     }
 
     console.time('code-review-time');
     try {
-      const fileRevUserPrompt = this.generateFileReviewUserPrompt(patch, filename);
+      const fileRevUserPrompt = await this.generateFileReviewUserPrompt(patch, filename, repoOwner, repo, branch);
       const res = await this.openai.beta.chat.completions.parse({
         messages: [
           {
@@ -142,5 +164,36 @@ export class Chat {
     });
 
     return res.choices[0]?.message?.content || '';
+  }
+
+  public async getFileFromRepo(
+    path: string,
+    owner: string,
+    repo: string,
+    ref: string
+  ): Promise<string> {
+    try {
+      const { data } = await this.octokit.repos.getContent({
+        owner,
+        repo,
+        path,
+        ref,
+      });
+
+      // Check if data is an array (directory) or not a file
+      if (Array.isArray(data) || !('content' in data)) {
+        throw new Error('Requested path is not a file');
+      }
+
+      // Decode the base64 content
+      const content = Buffer.from(data.content, 'base64').toString('utf-8');
+      if (content.split('\n').length > 500) {
+        return "File could not be read as it is too big"
+      }
+      return content;
+    } catch (error) {
+      console.error("Error fetching file:", error);
+      throw error;
+    }
   }
 }
