@@ -4,13 +4,16 @@ import { z } from "zod";
 import { FileReviewPrompt, GetPrSummaryPrompt, GetCommitReviewSummaryPrompt } from './prompt';
 import { ProbotOctokit } from 'probot';
 
-const FileReviewResponse = z.object({
+const FileReview = z.object({
   review: z.string(),
-  position: z.number().int(),
+  line: z.number().int(),
 });
 
+const FileReviews = z.object({
+  reviews: z.array(FileReview)
+});
 
-type FileReviewType = z.infer<typeof FileReviewResponse>;
+type FileReviewsType = z.infer<typeof FileReviews>;
 
 export class Chat {
   private openai: OpenAI | AzureOpenAI;
@@ -76,7 +79,7 @@ export class Chat {
     return changedFiles;
   }
 
-  public async fileReview(patch: string, filename: string,  repoOwner: string, repo: string, branch: string ): Promise<FileReviewType | null> {
+  public async fileReview(patch: string, filename: string,  repoOwner: string, repo: string, branch: string ): Promise<FileReviewsType | null> {
     if (!patch || !filename) {
       throw new Error('Patch and filename are required');
     }
@@ -99,7 +102,7 @@ export class Chat {
         temperature: +(process.env.temperature || 0.3),
         top_p: +(process.env.top_p || 0.8),
         max_tokens: process.env.max_tokens ? +process.env.max_tokens : 2000,
-        response_format: zodResponseFormat(FileReviewResponse, "FileReviewResponse")
+        response_format: zodResponseFormat(FileReviews, "FileReviewResponse")
       });
 
       if (!res.choices.length) {

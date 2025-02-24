@@ -1,16 +1,28 @@
 import { z } from "zod";
 import { ProbotOctokit } from 'probot';
-declare const FileReviewResponse: z.ZodObject<{
-    review: z.ZodString;
-    position: z.ZodNumber;
+declare const FileReviews: z.ZodObject<{
+    reviews: z.ZodArray<z.ZodObject<{
+        review: z.ZodString;
+        line: z.ZodNumber;
+    }, "strip", z.ZodTypeAny, {
+        review: string;
+        line: number;
+    }, {
+        review: string;
+        line: number;
+    }>, "many">;
 }, "strip", z.ZodTypeAny, {
-    review: string;
-    position: number;
+    reviews: {
+        review: string;
+        line: number;
+    }[];
 }, {
-    review: string;
-    position: number;
+    reviews: {
+        review: string;
+        line: number;
+    }[];
 }>;
-type FileReviewType = z.infer<typeof FileReviewResponse>;
+type FileReviewsType = z.infer<typeof FileReviews>;
 export declare class Chat {
     private openai;
     private isAzure;
@@ -18,7 +30,7 @@ export declare class Chat {
     constructor(apiKey: string, octokit: InstanceType<typeof ProbotOctokit>);
     private generateFileReviewUserPrompt;
     private generatePRSummaryUserPrompt;
-    fileReview(patch: string, filename: string, repoOwner: string, repo: string, branch: string): Promise<FileReviewType | null>;
+    fileReview(patch: string, filename: string, repoOwner: string, repo: string, branch: string): Promise<FileReviewsType | null>;
     getPRSummary(changedFiles: string): Promise<string>;
     getCommitReviewsSummary(fileReviews: string): Promise<string>;
     getFileFromRepo(path: string, owner: string, repo: string, ref: string): Promise<string>;

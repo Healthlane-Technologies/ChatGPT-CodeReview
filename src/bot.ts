@@ -191,12 +191,15 @@ export const robot = (app: Probot) => {
         }
         try {
           const res = await chat?.fileReview(patch, file.filename, repo.owner, repo.repo, pull_request.head.ref);
-          if (!!res && res.review !== "") {
-            fileReviews.push({
-              path: file.filename,
-              body: res.review,
-              position: patch.split('\n').length - 1,
-            })
+          if (!!res) {
+            for (const fileReview of res.reviews) {
+              if (fileReview.review !== "")
+              fileReviews.push({
+                path: file.filename,
+                body: fileReview.review,
+                line: fileReview.line,
+              })
+            }
           }
         } catch (e) {
           log.info(`review ${file.filename} failed`, e);
