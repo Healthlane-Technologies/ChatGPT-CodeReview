@@ -109,6 +109,7 @@ Important Notes:
 - Skip .github/ directory files
 - For multi-line issues, use the first line where the issue begins
 - Reviews should be specific and actionable
+- if there are no reviews you must return an empty string as review and set line to 0
 
 Example Response:
 {
