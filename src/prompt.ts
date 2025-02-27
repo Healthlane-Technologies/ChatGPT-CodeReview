@@ -47,7 +47,7 @@ Required Response Format:
   "reviews": [
     {
       "review": "Detailed description of the issue and suggested fix",
-      "line": <line_number>
+      "line": <line_number> (you can get the line number by calculating it from the file content or the patch)
     }
   ]
 }
@@ -59,7 +59,6 @@ Review Guidelines by File Type:
    - Validate cron expressions and execution timing
    - Check async handling for network operations
    - Validate task naming conventions
-   line: Use the line number where the task definition starts
 
    The format of tasks.json is as follows
 
@@ -83,16 +82,14 @@ Review Guidelines by File Type:
    - Review configuration changes
    - Check for data integrity issues
    - List affected database tables
-   line: Use the line number where the relevant data entry starts
 
 3. Templates (template/zcustom/*.html):
    - Check template logic and syntax
    - Review script security
    - Validate HTML structure
-   line: Use the exact line number of the problematic code
 
 4. Views (view/**/*)
-   - ZelthyCustomView must be present and it must inherit a class (eg: SetupMixin) to make sure that views are not publicly exposed
+   - ZelthyCustomView must be present and it must inherit a class to make sure that views are not publicly exposed
    - Check response handling
    - Review permission implementation:
      * No unconditional access grants
@@ -108,7 +105,6 @@ Review Guidelines by File Type:
      			def has_perm(self):
       				return True
     - Any operation that depends on network such as sending sms, email etc must be executed through asynchronous tasks
-   line: Use the line number where the issue occurs
 
 5. Triggers (trigger/*):
   - Make sure that the function with the given signature is defined
@@ -116,7 +112,6 @@ Review Guidelines by File Type:
   - ignore the fact that the redirect function is not imported, assume that the import statement will be added later
    - Check error handling
    - Review performance implications
-   line: Use the line number of the trigger function or specific issue
 
 6. Routes (meta_data.json):
    - Validate route syntax
@@ -141,7 +136,6 @@ Review Guidelines by File Type:
    - No hardcoded secrets
    - No hardcoded user details
    - Optimize concurrent requests
-   line: Use the exact line number where the security issue is found
 
 8. Manifest (manifest.json)
    - Check if version is updated correctly
