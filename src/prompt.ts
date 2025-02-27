@@ -61,6 +61,24 @@ Review Guidelines by File Type:
    - Validate task naming conventions
    line: Use the line number where the task definition starts
 
+   The format of tasks.json is as follows
+
+   {
+      "tasks": [
+        {
+          "cron_moy": "<cron_moy>",
+          "cron_hour": "<cron_hour>",
+          "cron_minute": "<cron_minute>",
+          "cron_dow": "<cron_dow>",
+          "cron_dom": "<cron_dom>",
+          "code": "<python_code>",
+          "task_name": "<task_name>",
+          "kwargs": "{}",
+          "enabled": <boolean>
+        }
+      ]
+    }
+
 2. Fixtures (fixture.json):
    - Review configuration changes
    - Check for data integrity issues
@@ -74,17 +92,28 @@ Review Guidelines by File Type:
    line: Use the exact line number of the problematic code
 
 4. Views (view/**/*)
-   - Verify ZelthyCustomView inheritance
+   - ZelthyCustomView must be present and it must inherit a class (eg: SetupMixin) to make sure that views are not publicly exposed
    - Check response handling
    - Review permission implementation:
-     * Correct format: permission = "<app_name>.<permission>"
      * No unconditional access grants
-   - Validate SQL query usage
-   - Check async task references
+   - Raw SQL queries must never be used unless it's absolutely required, if it is used make sure that it is a read
+   - ensure that ZelthyCustomView subclasses a view from Zelthy1 library
+    - ZelthyCustomView can have a has_perm method to implement access_condition
+      or it can also use Zelthy1's native permissioning as specified below
+      class ZelthyCustomView(SetUpMixin, View):
+       	permission = 'doctor.view_doctormodel'
+    - ZelthyCustomView must never subclass any of django's generic views without subclassing SetupMixin as specified below
+    - Never grant unconditional access
+      class ZelthyCustomView(SetUpMixin, View): # incorrect, this should never be done
+     			def has_perm(self):
+      				return True
+    - Any operation that depends on network such as sending sms, email etc must be executed through asynchronous tasks
    line: Use the line number where the issue occurs
 
 5. Triggers (trigger/*):
-   - Verify zelthy_trigger function signature
+  - Make sure that the function with the given signature is defined
+    def zelthy_trigger(request, objects, *args):
+  - ignore the fact that the redirect function is not imported, assume that the import statement will be added later
    - Check error handling
    - Review performance implications
    line: Use the line number of the trigger function or specific issue
@@ -93,7 +122,20 @@ Review Guidelines by File Type:
    - Validate route syntax
    - Check for duplicates
    - Verify regex patterns
-   line: Use the line number of the route definition
+
+   the format of meta_data.json is
+
+   {
+      "route": [
+        {
+          "regex": "<route_regex>",
+          "is_enabled": <boolean>,
+          "route_name": "<route_name>",
+          "view": "<view>"
+        }
+      ]
+    }
+
 
 7. Security & Best Practices:
    - No hardcoded secrets
@@ -101,8 +143,13 @@ Review Guidelines by File Type:
    - Optimize concurrent requests
    line: Use the exact line number where the security issue is found
 
+8. Manifest (manifest.json)
+   - Check if version is updated correctly
+   - make sure that a remark is added
+   - do not warn about missing tasks, fixture or config_script as they are optional
+
 Important Notes:
-- Only return reviews if issues are found
+- Only return reviews if issues are found you must never return a description of changes or indicate that a review is not required
 - line must correspond to the line numbers in the patch
 - For deletions, use the line number before the deletion
 - For additions, use the new line number
