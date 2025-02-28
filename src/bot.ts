@@ -190,15 +190,20 @@ export const robot = (app: Probot) => {
           continue;
         }
         try {
-          const res = await chat?.fileReview(patch, file.filename, repo.owner, repo.repo, pull_request.head.ref);
-          if (!!res) {
-            for (const fileReview of res.reviews) {
-              if (fileReview.review !== "")
-              fileReviews.push({
-                path: file.filename,
-                body: fileReview.review,
-                line: fileReview.line,
-              })
+          const {reviews, fileContent} = await chat?.fileReview(patch, file.filename, repo.owner, repo.repo, pull_request.head.ref);
+          const lines = fileContent.split("\n").length
+          if (!!reviews) {
+            for (const fileReview of reviews.reviews) {
+              if (fileReview.review !== "") {
+                if (fileReview.line < 1 || fileReview.line > lines) {
+                  continue
+                }
+                fileReviews.push({
+                  path: file.filename,
+                  body: fileReview.review,
+                  line: fileReview.line,
+                })
+              }
             }
           }
         } catch (e) {

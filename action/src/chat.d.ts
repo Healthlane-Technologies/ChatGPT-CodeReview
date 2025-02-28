@@ -30,7 +30,10 @@ export declare class Chat {
     constructor(apiKey: string, octokit: InstanceType<typeof ProbotOctokit>);
     private generateFileReviewUserPrompt;
     private generatePRSummaryUserPrompt;
-    fileReview(patch: string, filename: string, repoOwner: string, repo: string, branch: string): Promise<FileReviewsType | null>;
+    fileReview(patch: string, filename: string, repoOwner: string, repo: string, branch: string): Promise<{
+        reviews: FileReviewsType | null;
+        fileContent: string;
+    }>;
     getPRSummary(changedFiles: string): Promise<string>;
     getCommitReviewsSummary(fileReviews: string): Promise<string>;
     getFileFromRepo(path: string, owner: string, repo: string, ref: string): Promise<string>;
