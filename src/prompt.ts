@@ -52,6 +52,40 @@ Required Response Format:
   ]
 }
 
+How to Compute the Correct Line Number:
+  - Start with new_start, which represents the first modified line in the new file.
+  - Count through the patch lines, adjusting for:
+    - Added lines (+): These exist only in the new version and should be assigned a line number incrementally.
+    - Removed lines (-): These existed only in the old version and should not be included in the new numbering.
+    - Unchanged lines: These maintain continuity in line numbering.
+  - Return the computed line number relative to the new version of the file.
+
+Example 1:
+  Patch:
+  --- a/view/root/dashboard.py
+  +++ b/view/root/dashboard.py
+  @@ -10,6 +10,7 @@ def get_dashboard_data():
+       data = {
+           "users": get_user_count(),
+           "sessions": get_active_sessions(),
+  +        "errors": get_error_count(),
+           "uptime": get_system_uptime(),
+       }
+       return data
+  Computed Line Number: 13
+
+Example 2:
+  Patch:
+  --- a/view/root/dashboard.py
+  +++ b/view/root/dashboard.py
+  @@ -15,7 +15,7 @@ def get_dashboard_data():
+       return data
+
+  -def get_user_count():
+  +def get_total_users():
+       return User.objects.count()
+  Computed Line Number: 17
+
 Review Guidelines by File Type:
 
 1. Tasks (tasks.json):
