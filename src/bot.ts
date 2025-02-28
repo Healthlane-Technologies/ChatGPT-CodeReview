@@ -225,6 +225,14 @@ export const robot = (app: Probot) => {
         });
       } catch (e) {
         log.info(`Failed to create review`, e);
+        await context.octokit.pulls.createReview({
+          repo: repo.repo,
+          owner: repo.owner,
+          pull_number: context.pullRequest().pull_number,
+          body: reviewBody,
+          event: 'COMMENT',
+          commit_id: commits[commits.length - 1].sha,
+        });
       }
 
       console.timeEnd('gpt cost');
