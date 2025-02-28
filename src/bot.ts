@@ -214,12 +214,11 @@ export const robot = (app: Probot) => {
       const reviewBody = await chat.getCommitReviewsSummary(fileReviewSummaryUserPrompt);
 
       try {
-        await context.octokit.pulls.createReview({
+        await context.octokit.pulls.createReviewComment({
           repo: repo.repo,
           owner: repo.owner,
           pull_number: context.pullRequest().pull_number,
           body: reviewBody,
-          event: 'COMMENT',
           commit_id: commits[commits.length - 1].sha,
           comments: fileReviews,
         });
