@@ -49,9 +49,7 @@ export class Chat {
     this.octokit = octokit;
   }
 
-  private async generateFileReviewUserPrompt(patch: string, filename: string, repoOwner: string, repo: string, branch: string): Promise<string> {
-    const fileContent = await this.getFileFromRepo(filename, repoOwner, repo, branch);
-
+  private async generateFileReviewUserPrompt(patch: string, filename: string, fileContent: string): Promise<string> {
     if (fileContent !== "" || fileContent.split("\n").length < 300) {
       return `
         Filename: ${filename}
@@ -79,14 +77,15 @@ export class Chat {
     return changedFiles;
   }
 
-  public async fileReview(patch: string, filename: string,  repoOwner: string, repo: string, branch: string ): Promise<FileReviewsType | null> {
+  public async fileReview(patch: string, filename: string, repoOwner: string, repo: string, branch: string): Promise<{ reviews: FileReviewsType | null, fileContent: string }>  {
     if (!patch || !filename) {
       throw new Error('Patch and filename are required');
     }
 
     console.time('code-review-time');
     try {
-      const fileRevUserPrompt = await this.generateFileReviewUserPrompt(patch, filename, repoOwner, repo, branch);
+      const fileContent = await this.getFileFromRepo(filename, repoOwner, repo, branch);
+      const fileRevUserPrompt = await this.generateFileReviewUserPrompt(patch, filename, fileContent);
       const res = await this.openai.beta.chat.completions.parse({
         messages: [
           {
@@ -109,7 +108,10 @@ export class Chat {
         throw new Error('No response received from OpenAI');
       }
 
-      return res.choices[0].message.parsed;
+      return {
+        reviews: res.choices[0].message.parsed,
+        fileContent: fileContent
+      };
     } catch (error) {
       console.error('OpenAI API request failed:', error);
       throw new Error(`Failed to process request: ${error instanceof Error ? error.message : 'Unknown error'}`);
