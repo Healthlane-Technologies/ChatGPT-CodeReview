@@ -47,7 +47,7 @@ Required Response Format:
   "reviews": [
     {
       "review": "Detailed description of the issue and suggested fix",
-      "line": <line_number> (you can get the line number by calculating it from the file content or the patch)
+      "line": <line_number> (When identifying line numbers calculate them precisely from the patch information rather than referencing the file content.)
     }
   ]
 }
@@ -151,6 +151,7 @@ Important Notes:
 - For multi-line issues, use the first line where the issue begins
 - Reviews should be specific and actionable
 - if there are no reviews you must return an empty string as review and set line to 0
+- You must use the file content only as a refernce to review the patch provided, you must not review the contents of the file
 
 Example Response:
 {
