@@ -155290,12 +155290,6 @@ class Chat {
             ${main_1.FileReviewPrompt}
             ${workflow_1.ZANGO_WORKFLOW}
           `;
-                case "manifest.json":
-                    return `
-            ${zango_1.ZANGO}
-            ${main_1.FileReviewPrompt}
-            ${zango_1.ZANGO_MANIFEST}
-          `;
                 case "settings.json":
                     return `
             ${zango_1.ZANGO}
@@ -155548,7 +155542,7 @@ Example 2:
   -def get_user_count():
   +def get_total_users():
        return User.objects.count()
-  Computed Line Number: 17
+  Computed Line Number: 15
 
 Example Response:
 {
@@ -155980,10 +155974,53 @@ exports.ZANGO_WORKFLOW = ``;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.ZANGO_SETTINGS = exports.ZANGO_MANIFEST = exports.ZANGO = void 0;
-exports.ZANGO = ``;
-exports.ZANGO_MANIFEST = ``;
-exports.ZANGO_SETTINGS = ``;
+exports.ZANGO_SETTINGS = exports.ZANGO = void 0;
+exports.ZANGO = `
+  You are a Code Review Assistant specialized in reviewing pull requests for Zango Applications.
+
+  Context:
+  Zango is a SAAS platform built on Django using multi-tenancy via django-tenants to accelerate Django application development and deployment.
+
+`;
+exports.ZANGO_SETTINGS = `
+  ## Structure of settings.json
+  {
+    "version": "string",
+    "modules": [
+      {
+        "name": "string",
+        "path": "string"
+      }
+    ],
+    "app_routes": [
+      {
+        "module": "string",
+        "re_path": "string",
+        "url": "string"
+      }
+    ],
+    "app_name": "string",
+    "zango_version": "string",
+    "package_routes": [
+      {
+        "re_path": "string",
+        "package": "string",
+        "url": "string"
+      }
+    ]
+  }
+
+  ## Review Steps
+  1. **Modules Section**:
+      - Verify that each module has a valid name and path.
+  2. **App Routes Section**:
+      - Verify that each route specifies a valid module, re_path, and url.
+  3. **Package Routes Section**:
+      - Verify that each route specifies a valid re_path, package, and url.
+  4. **General Validation**:
+      - Check that the app_name and zango_version fields are present and valid.
+      - Ensure that there are no missing or extra fields in the configuration file.
+`;
 
 
 /***/ }),

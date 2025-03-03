@@ -2,7 +2,7 @@ import { OpenAI, AzureOpenAI } from 'openai';
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { FileReviewPrompt, GetPrSummaryPrompt, GetCommitReviewSummaryPrompt } from './prompts/main';
-import { ZANGO, ZANGO_MANIFEST, ZANGO_SETTINGS } from './prompts/zango/zango';
+import { ZANGO, ZANGO_SETTINGS } from './prompts/zango/zango';
 import { ZANGO_WORKFLOW } from './prompts/zango/workflow';
 import { ZANGO_CRUD_FORM, ZANGO_CRUD_VIEW, ZANGO_CRUD_TABLE, ZANGO_CRUD_DETAIL } from './prompts/zango/crud';
 import { ZANGO_APP_STRUCTURE } from './prompts/zango/structure';
@@ -134,12 +134,6 @@ export class Chat {
             ${ZANGO}
             ${FileReviewPrompt}
             ${ZANGO_WORKFLOW}
-          `;
-        case "manifest.json":
-          return `
-            ${ZANGO}
-            ${FileReviewPrompt}
-            ${ZANGO_MANIFEST}
           `;
         case "settings.json":
           return `

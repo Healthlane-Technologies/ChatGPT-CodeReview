@@ -90,7 +90,7 @@ Example 2:
   -def get_user_count():
   +def get_total_users():
        return User.objects.count()
-  Computed Line Number: 17
+  Computed Line Number: 15
 
 Example Response:
 {
