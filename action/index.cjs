@@ -155071,7 +155071,8 @@ const robot = (app) => {
                 continue;
             }
             try {
-                const { reviews } = await chat?.fileReview(patch, file.filename, repo.owner, repo.repo, pull_request.head.ref);
+                console.log(`branch is ${pull_request.head.ref} ${pull_request.base.ref}`);
+                const { reviews } = await chat?.fileReview(patch, file.filename, repo.owner, repo.repo, pull_request.base.ref);
                 console.log(`File Reviews are ${file.filename} ${reviews}`);
                 // const lines = fileContent.split("\n").length
                 if (!!reviews) {
