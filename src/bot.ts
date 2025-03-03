@@ -191,11 +191,13 @@ export const robot = (app: Probot) => {
         }
         try {
           const {reviews, fileContent} = await chat?.fileReview(patch, file.filename, repo.owner, repo.repo, pull_request.head.ref);
+          console.log(`File Reviews are ${file.filename} ${reviews}`);
           const lines = fileContent.split("\n").length
           if (!!reviews) {
             for (const fileReview of reviews.reviews) {
               if (fileReview.review !== "") {
                 if (fileReview.line < 1 || fileReview.line > lines) {
+                  console.log(`Line number error for ${file.filename} ${fileReview.line}`);
                   continue
                 }
                 fileReviews.push({
@@ -216,29 +218,42 @@ export const robot = (app: Probot) => {
         fileReviewSummaryUserPrompt += `Filename: ${fileReview.path}\nReview: ${fileReview.body}\n`
       }
 
-      const reviewBody = await chat.getCommitReviewsSummary(fileReviewSummaryUserPrompt);
+      if (fileReviewSummaryUserPrompt != "") {
+        const reviewBody = await chat.getCommitReviewsSummary(fileReviewSummaryUserPrompt);
 
-      try {
+        try {
+          await context.octokit.pulls.createReview({
+            repo: repo.repo,
+            owner: repo.owner,
+            pull_number: context.pullRequest().pull_number,
+            body: reviewBody,
+            event: 'COMMENT',
+            commit_id: commits[commits.length - 1].sha,
+            comments: fileReviews,
+          });
+        } catch (e) {
+          log.info(`Failed to create review`, e);
+          await context.octokit.pulls.createReview({
+            repo: repo.repo,
+            owner: repo.owner,
+            pull_number: context.pullRequest().pull_number,
+            body: reviewBody,
+            event: 'COMMENT',
+            commit_id: commits[commits.length - 1].sha,
+          });
+        }
+      } else {
         await context.octokit.pulls.createReview({
           repo: repo.repo,
           owner: repo.owner,
           pull_number: context.pullRequest().pull_number,
-          body: reviewBody,
-          event: 'COMMENT',
-          commit_id: commits[commits.length - 1].sha,
-          comments: fileReviews,
-        });
-      } catch (e) {
-        log.info(`Failed to create review`, e);
-        await context.octokit.pulls.createReview({
-          repo: repo.repo,
-          owner: repo.owner,
-          pull_number: context.pullRequest().pull_number,
-          body: reviewBody,
+          body: "Everthing seems good nothing to review",
           event: 'COMMENT',
           commit_id: commits[commits.length - 1].sha,
         });
       }
+
+
 
       console.timeEnd('gpt cost');
       log.info(
