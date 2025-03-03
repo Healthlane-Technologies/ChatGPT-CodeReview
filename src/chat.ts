@@ -1,8 +1,15 @@
 import { OpenAI, AzureOpenAI } from 'openai';
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
-import { FileReviewPrompt, GetPrSummaryPrompt, GetCommitReviewSummaryPrompt } from './prompt';
+import { FileReviewPrompt, GetPrSummaryPrompt, GetCommitReviewSummaryPrompt } from './prompts/main';
+import { ZANGO, ZANGO_MANIFEST, ZANGO_SETTINGS } from './prompts/zango/zango';
+import { ZANGO_WORKFLOW } from './prompts/zango/workflow';
+import { ZANGO_CRUD_FORM, ZANGO_CRUD_VIEW, ZANGO_CRUD_TABLE, ZANGO_CRUD_DETAIL } from './prompts/zango/crud';
+import { ZANGO_APP_STRUCTURE } from './prompts/zango/structure';
+import { ZELTHY1_CONTEXT, ZELTHY1_REVIEW_GUIDELINES } from './prompts/zelthy/prompt';
+import { ZELTHY1_APP_STRUCTURE } from './prompts/zelthy/structure';
 import { ProbotOctokit } from 'probot';
+import { basename } from 'path';
 
 const FileReview = z.object({
   review: z.string(),
@@ -77,6 +84,83 @@ export class Chat {
     return changedFiles;
   }
 
+  private async getFileReviewSystemPrompt(repoOwner: string, repo: string, branch: string, filename: string): Promise<string> {
+    const manifest = await this.getFileFromRepo("manifest.json", repoOwner, repo, branch)
+    const manifestJson = JSON.parse(manifest);
+    if ("zango_version" in manifestJson) {
+      const filName = basename(filename)
+      switch (filName) {
+        case "details.py":
+          return `
+            ${ZANGO}
+            ${FileReviewPrompt}
+            ${ZANGO_APP_STRUCTURE}
+            ${ZANGO_CRUD_DETAIL}
+          `;
+        case "forms.py":
+          return `
+            ${ZANGO}
+            ${FileReviewPrompt}
+            ${ZANGO_APP_STRUCTURE}
+            ${ZANGO_CRUD_FORM}
+          `;
+        case "models.py":
+          return `
+            ${ZANGO}
+            ${FileReviewPrompt}
+            ${ZANGO_APP_STRUCTURE}
+          `;
+        case "policies.json":
+          return `
+            ${ZANGO}
+            ${FileReviewPrompt}
+          `;
+        case "tables.py":
+          return `
+            ${ZANGO}
+            ${FileReviewPrompt}
+            ${ZANGO_APP_STRUCTURE}
+            ${ZANGO_CRUD_TABLE}
+          `;
+        case "views.py":
+          return `
+            ${ZANGO}
+            ${FileReviewPrompt}
+            ${ZANGO_APP_STRUCTURE}
+            ${ZANGO_CRUD_VIEW}
+          `;
+        case "workflow.py":
+          return `
+            ${ZANGO}
+            ${FileReviewPrompt}
+            ${ZANGO_WORKFLOW}
+          `;
+        case "manifest.json":
+          return `
+            ${ZANGO}
+            ${FileReviewPrompt}
+            ${ZANGO_MANIFEST}
+          `;
+        case "settings.json":
+          return `
+            ${ZANGO}
+            ${FileReviewPrompt}
+            ${ZANGO_SETTINGS}
+          `;
+        default:
+          return `${ZANGO} ${FileReviewPrompt}`;
+      }
+    } else if ("app_versions" in manifestJson) {
+      return `
+        ${ZELTHY1_CONTEXT}
+        ${FileReviewPrompt}
+        ${ZELTHY1_APP_STRUCTURE}
+        ${ZELTHY1_REVIEW_GUIDELINES}
+      `;
+    }
+    return "Warn the user that the repository on which this review workflow is enabled might not be a zelthy or zango app";
+  }
+
   public async fileReview(patch: string, filename: string, repoOwner: string, repo: string, branch: string): Promise<{ reviews: FileReviewsType | null, fileContent: string }>  {
     if (!patch || !filename) {
       throw new Error('Patch and filename are required');
@@ -86,11 +170,12 @@ export class Chat {
     try {
       const fileContent = await this.getFileFromRepo(filename, repoOwner, repo, branch);
       const fileRevUserPrompt = await this.generateFileReviewUserPrompt(patch, filename, fileContent);
+      const fileRevSysPrompt = await this.getFileReviewSystemPrompt(repoOwner, repo, branch, filename);
       const res = await this.openai.beta.chat.completions.parse({
         messages: [
           {
             role: 'system',
-            content: FileReviewPrompt,
+            content: fileRevSysPrompt,
           },
           {
             role: 'user',
