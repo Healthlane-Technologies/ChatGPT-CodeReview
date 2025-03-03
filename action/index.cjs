@@ -155071,16 +155071,16 @@ const robot = (app) => {
                 continue;
             }
             try {
-                const { reviews, fileContent } = await chat?.fileReview(patch, file.filename, repo.owner, repo.repo, pull_request.head.ref);
+                const { reviews } = await chat?.fileReview(patch, file.filename, repo.owner, repo.repo, pull_request.head.ref);
                 console.log(`File Reviews are ${file.filename} ${reviews}`);
-                const lines = fileContent.split("\n").length;
+                // const lines = fileContent.split("\n").length
                 if (!!reviews) {
                     for (const fileReview of reviews.reviews) {
                         if (fileReview.review !== "") {
-                            if (fileReview.line < 1 || fileReview.line > lines) {
-                                console.log(`Line number error for ${file.filename} ${fileReview.line}`);
-                                continue;
-                            }
+                            // if (fileReview.line < 1 || fileReview.line > lines) {
+                            //   console.log(`Line number error for ${file.filename} ${fileReview.line}`);
+                            //   continue
+                            // }
                             fileReviews.push({
                                 path: file.filename,
                                 body: fileReview.review,
