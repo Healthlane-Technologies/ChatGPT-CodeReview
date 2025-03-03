@@ -155084,7 +155084,7 @@ const robot = (app) => {
                             fileReviews.push({
                                 path: file.filename,
                                 body: fileReview.review,
-                                line: fileReview.line,
+                                position: patch.split('\n').length - 1,
                             });
                         }
                     }
