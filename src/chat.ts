@@ -162,7 +162,10 @@ export class Chat {
 
     console.time('code-review-time');
     try {
-      const fileContent = await this.getFileFromRepo(filename, repoOwner, repo, branch);
+      let fileContent = await this.getFileFromRepo(filename, repoOwner, repo, branch);
+      if (fileContent.split("\n").length > 500) {
+        fileContent = "file content is not included as it is too big";
+      }
       const fileRevUserPrompt = await this.generateFileReviewUserPrompt(patch, filename, fileContent);
       const fileRevSysPrompt = await this.getFileReviewSystemPrompt(repoOwner, repo, branch, filename);
       const res = await this.openai.beta.chat.completions.parse({
@@ -271,9 +274,6 @@ export class Chat {
 
       // Decode the base64 content
       const content = Buffer.from(data.content, 'base64').toString('utf-8');
-      if (content.split('\n').length > 500) {
-        return "File could not be read as it is too big"
-      }
       return content;
     } catch (error) {
       console.error("Error fetching file:", error);

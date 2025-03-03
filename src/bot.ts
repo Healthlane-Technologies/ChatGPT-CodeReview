@@ -191,7 +191,7 @@ export const robot = (app: Probot) => {
         }
         try {
           console.log(`branch is ${pull_request.head.ref} ${pull_request.base.ref}`)
-          const {reviews} = await chat?.fileReview(patch, file.filename, repo.owner, repo.repo, pull_request.base.ref);
+          const {reviews} = await chat?.fileReview(patch, file.filename, repo.owner, repo.repo, pull_request.head.ref);
           console.log(`File Reviews are ${file.filename} ${reviews}`);
           // const lines = fileContent.split("\n").length
           if (!!reviews) {
