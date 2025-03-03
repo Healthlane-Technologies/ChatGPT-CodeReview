@@ -155479,7 +155479,22 @@ Review Format Guidelines
     - For deletions: Use the line number before the deletion
     - For additions: Use the new line number after the addition
     - For multi-line issues: Use the first line where the issue begins
+    - Line number must be within the line numbers present in the patch
+      example:
+      patch:
+        @@ -100,4 +106,10 @@ func startServer() {
+            log.Println("Server started on port 8080")
+            http.ListenAndServe(":8080", nil)
+        }
+        +
+        +func shutdownServer() {
+        +    log.Println("Shutting down server gracefully")
+        +    // TODO: Implement proper shutdown logic
+        +}
+        +
+      for the above patch the line number must be within 100-106, it must not exceed this
   - Reviews must be specific, actionable, and focused on the patch changes
+  - Any content outside the patch changes must not be reviewed
   - Skip reviewing any files in the .github/ directory
   - Each review should include:
     - Exact line number
