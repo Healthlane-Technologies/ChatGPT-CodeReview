@@ -10,9 +10,6 @@ Core Requirements
 
 Review Format Guidelines
   - Line numbers must reference the patch directly:
-    - For deletions: Use the line number before the deletion
-    - For additions: Use the new line number after the addition
-    - For multi-line issues: Use the first line where the issue begins
     - Line number must be within the line numbers present in the patch
       example:
       patch:
@@ -26,7 +23,7 @@ Review Format Guidelines
         +    // TODO: Implement proper shutdown logic
         +}
         +
-      for the above patch the line number must be within 100-106, it must not exceed this
+      for the above patch the line number must be within 100-106, it must not exceed 106 or be less than 100
   - Reviews must be specific, actionable, and focused on the patch changes
   - Any content outside the patch changes must not be reviewed
   - Skip reviewing any files in the .github/ directory
