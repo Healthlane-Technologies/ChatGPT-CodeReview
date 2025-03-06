@@ -252,9 +252,9 @@ export class Chat {
           if (function_name == "getFileFromRepo") {
             const function_args = JSON.parse(tool_call.function.arguments) as GetFileFromRepoArgs;
             const function_response = await this.getFileFromRepo(
-              function_args.repo,
-              function_args.owner,
               function_args.path,
+              function_args.owner,
+              function_args.repo,
               function_args.ref,
             );
             messages.push(

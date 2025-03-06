@@ -155407,7 +155407,7 @@ class Chat {
                     const function_name = tool_call.function.name;
                     if (function_name == "getFileFromRepo") {
                         const function_args = JSON.parse(tool_call.function.arguments);
-                        const function_response = await this.getFileFromRepo(function_args.repo, function_args.owner, function_args.path, function_args.ref);
+                        const function_response = await this.getFileFromRepo(function_args.path, function_args.owner, function_args.repo, function_args.ref);
                         messages.push(completion.choices[0].message);
                         messages.push({
                             role: "tool",
