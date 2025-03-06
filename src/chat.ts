@@ -6,6 +6,7 @@ import { ZANGO, ZANGO_SETTINGS } from './prompts/zango/zango';
 import { ZANGO_WORKFLOW } from './prompts/zango/workflow';
 import { ZANGO_CRUD_FORM, ZANGO_CRUD_VIEW, ZANGO_CRUD_TABLE, ZANGO_CRUD_DETAIL } from './prompts/zango/crud';
 import { ZANGO_APP_STRUCTURE } from './prompts/zango/structure';
+import { ZANGO_POLICIES } from './prompts/zango/policies';
 import { ZELTHY1_CONTEXT, ZELTHY1_REVIEW_GUIDELINES } from './prompts/zelthy/prompt';
 import { ZELTHY1_APP_STRUCTURE } from './prompts/zelthy/structure';
 import { ProbotOctokit } from 'probot';
@@ -54,11 +55,16 @@ export class Chat {
     }
 
     this.octokit = octokit;
+    (globalThis as any).OctoKitInstance = octokit;
   }
 
-  private async generateFileReviewUserPrompt(patch: string, filename: string, fileContent: string): Promise<string> {
+  private async generateFileReviewUserPrompt(patch: string, filename: string, fileContent: string, repo: string, repoOwner: string, branch: string): Promise<string> {
     if (fileContent !== "" || fileContent.split("\n").length < 300) {
       return `
+        Repository: ${repo}
+        Repository Owner: ${repoOwner}
+        Branch: ${branch}
+
         Filename: ${filename}
         Patch:
         \`\`\`
@@ -114,6 +120,7 @@ export class Chat {
           return `
             ${ZANGO}
             ${FileReviewPrompt}
+            ${ZANGO_POLICIES}
           `;
         case "tables.py":
           return `
@@ -166,7 +173,7 @@ export class Chat {
       if (fileContent.split("\n").length > 500) {
         fileContent = "file content is not included as it is too big";
       }
-      const fileRevUserPrompt = await this.generateFileReviewUserPrompt(patch, filename, fileContent);
+      const fileRevUserPrompt = await this.generateFileReviewUserPrompt(patch, filename, fileContent, repo, repoOwner, branch);
       const fileRevSysPrompt = await this.getFileReviewSystemPrompt(repoOwner, repo, branch, filename);
       const res = await this.openai.beta.chat.completions.parse({
         messages: [
@@ -183,7 +190,43 @@ export class Chat {
         temperature: +(process.env.temperature || 0.3),
         top_p: +(process.env.top_p || 0.8),
         max_tokens: process.env.max_tokens ? +process.env.max_tokens : 2000,
-        response_format: zodResponseFormat(FileReviews, "FileReviewResponse")
+        response_format: zodResponseFormat(FileReviews, "FileReviewResponse"),
+        tools: [{
+            "type": "function",
+            "function": {
+                "name": "getFileFromRepo",
+                "description": "Get content of specified file from repository",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "The path of the file"
+                        },
+                        "owner": {
+                            "type": "string",
+                            "description": "The owner of the repository"
+                        },
+                        "repo": {
+                            "type": "string",
+                            "description": "The repository to search the file"
+                        },
+                        "ref": {
+                            "type": "string",
+                            "description": "The branch to search the file"
+                        }
+                    },
+                    "required": [
+                        "path",
+                        "owner",
+                        "repo",
+                        "ref"
+                    ],
+                    "additionalProperties": false
+                },
+                "strict": true
+            }
+        }],
       });
 
       if (!res.choices.length) {
@@ -281,3 +324,32 @@ export class Chat {
     }
   }
 }
+
+// @ts-ignore
+async function getFileFromRepo(
+  path: string,
+  owner: string,
+  repo: string,
+  ref: string
+  ): Promise<string> {
+  try {
+    const { data } = await (globalThis as any).OctokitInstance.repos.getContent({
+      owner,
+      repo,
+      path,
+      ref,
+    });
+
+  // Check if data is an array (directory) or not a file
+    if (Array.isArray(data) || !('content' in data)) {
+    throw new Error('Requested path is not a file');
+    }
+
+    // Decode the base64 content
+    const content = Buffer.from(data.content, 'base64').toString('utf-8');
+    return content;
+    } catch (error) {
+    console.error("Error fetching file:", error);
+    throw error;
+  }
+};

@@ -155192,6 +155192,7 @@ const zango_1 = __nccwpck_require__(35039);
 const workflow_1 = __nccwpck_require__(37213);
 const crud_1 = __nccwpck_require__(62377);
 const structure_1 = __nccwpck_require__(39011);
+const policies_1 = __nccwpck_require__(73925);
 const prompt_1 = __nccwpck_require__(50415);
 const structure_2 = __nccwpck_require__(47370);
 const path_1 = __nccwpck_require__(71017);
@@ -155229,10 +155230,15 @@ class Chat {
             });
         }
         this.octokit = octokit;
+        globalThis.OctoKitInstance = octokit;
     }
-    async generateFileReviewUserPrompt(patch, filename, fileContent) {
+    async generateFileReviewUserPrompt(patch, filename, fileContent, repo, repoOwner, branch) {
         if (fileContent !== "" || fileContent.split("\n").length < 300) {
             return `
+        Repository: ${repo}
+        Repository Owner: ${repoOwner}
+        Branch: ${branch}
+
         Filename: ${filename}
         Patch:
         \`\`\`
@@ -155284,6 +155290,7 @@ class Chat {
                     return `
             ${zango_1.ZANGO}
             ${main_1.FileReviewPrompt}
+            ${policies_1.ZANGO_POLICIES}
           `;
                 case "tables.py":
                     return `
@@ -155335,7 +155342,7 @@ class Chat {
             if (fileContent.split("\n").length > 500) {
                 fileContent = "file content is not included as it is too big";
             }
-            const fileRevUserPrompt = await this.generateFileReviewUserPrompt(patch, filename, fileContent);
+            const fileRevUserPrompt = await this.generateFileReviewUserPrompt(patch, filename, fileContent, repo, repoOwner, branch);
             const fileRevSysPrompt = await this.getFileReviewSystemPrompt(repoOwner, repo, branch, filename);
             const res = await this.openai.beta.chat.completions.parse({
                 messages: [
@@ -155352,7 +155359,43 @@ class Chat {
                 temperature: +(process.env.temperature || 0.3),
                 top_p: +(process.env.top_p || 0.8),
                 max_tokens: process.env.max_tokens ? +process.env.max_tokens : 2000,
-                response_format: (0, zod_1.zodResponseFormat)(FileReviews, "FileReviewResponse")
+                response_format: (0, zod_1.zodResponseFormat)(FileReviews, "FileReviewResponse"),
+                tools: [{
+                        "type": "function",
+                        "function": {
+                            "name": "getFileFromRepo",
+                            "description": "Get content of specified file from repository",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "path": {
+                                        "type": "string",
+                                        "description": "The path of the file"
+                                    },
+                                    "owner": {
+                                        "type": "string",
+                                        "description": "The owner of the repository"
+                                    },
+                                    "repo": {
+                                        "type": "string",
+                                        "description": "The repository to search the file"
+                                    },
+                                    "ref": {
+                                        "type": "string",
+                                        "description": "The branch to search the file"
+                                    }
+                                },
+                                "required": [
+                                    "path",
+                                    "owner",
+                                    "repo",
+                                    "ref"
+                                ],
+                                "additionalProperties": false
+                            },
+                            "strict": true
+                        }
+                    }],
             });
             if (!res.choices.length) {
                 throw new Error('No response received from OpenAI');
@@ -155438,6 +155481,29 @@ class Chat {
     }
 }
 exports.Chat = Chat;
+// @ts-ignore
+async function getFileFromRepo(path, owner, repo, ref) {
+    try {
+        const { data } = await globalThis.OctokitInstance.repos.getContent({
+            owner,
+            repo,
+            path,
+            ref,
+        });
+        // Check if data is an array (directory) or not a file
+        if (Array.isArray(data) || !('content' in data)) {
+            throw new Error('Requested path is not a file');
+        }
+        // Decode the base64 content
+        const content = Buffer.from(data.content, 'base64').toString('utf-8');
+        return content;
+    }
+    catch (error) {
+        console.error("Error fetching file:", error);
+        throw error;
+    }
+}
+;
 
 
 /***/ }),
@@ -155474,6 +155540,7 @@ Core Requirements
   - Return reviews ONLY when issues are found in the patch
   - Return an empty string as review and set line to 0 if no issues are found
   - Never return a description of changes or indicate that a review is not required when no issues are found
+  - Use the getFileFromRepo tool to get the contents of the files in the repository when required, make sure to use the exact repo, repo owner, path and branch provided by the user
 
 Review Format Guidelines
   - Line numbers must reference the patch directly:
@@ -155943,7 +156010,174 @@ Review Guidelines:
   - Verify that the form handles validation and data cleaning appropriately
 `;
 exports.ZANGO_CRUD_DETAIL = `
-  `;
+${ZANGO_CRUD_BASE}
+
+Zango Detail Package Documentation
+The Zango Detail package provides a class BaseDetail which can be used to declare and configure detail views.
+
+Customization Options:
+
+  - ModelCol: Used to represent fields from the Zango model in the detail view
+    - display_as: Text to display as the field label
+  - A class Meta should be added to the Detail class with the following attributes:
+    - fields: List defining the fields to be displayed in the detail view
+
+  - Several methods can be overridden to customize the detail view:
+    - get_title: Customize the title of the detail view based on the object
+    - is_activity_timeline_visible: Determine if the activity timeline should be visible to the user
+    - <field_name>_getval: Customize the display value for specific fields, including generating links or formatting data
+
+
+Example Zango Detail:
+
+from zango.core.utils import get_current_role
+from zango.apps.object_store.models import ObjectStore
+from ...appointment.forms import AppointmentForm
+from ...packages.crud.detail.base import BaseDetail
+from ...packages.crud.table.column import ModelCol
+from ...packages.appointments.models import AbstractAppointmentModel
+
+class BasePatientProgramDetail(BaseDetail):
+    id = ModelCol(display_as="ID")
+    patient = ModelCol(display_as="Patient")
+    doctor = ModelCol(display_as="Doctor")
+    hospital = ModelCol(display_as="Clinic")
+    contact_person = ModelCol(display_as="Contact Person")
+    years_since_diagnosis = ModelCol(display_as="Years since Diagnosis")
+    discontinuation_reason = ModelCol(display_as="Discontinuation Reason")
+    discontinuation_date = ModelCol(display_as="Discontinuation Date")
+    consent_date = ModelCol(display_as="Consent Date")
+    consent_file = ModelCol(display_as="Consent File")
+
+    class Meta:
+        fields = [
+            "id",
+            "patient",
+            "doctor",
+            "hospital",
+            "contact_person",
+            "years_since_diagnosis",
+            "discontinuation_reason",
+            "discontinuation_date",
+            "consent_date",
+            "consent_file",
+        ]
+
+    def get_title(self, obj, object_data):
+        """
+        It returns a string that represents the title of the patient program detail view.
+        """
+        return f"Patient Program: {obj.patient.first_name} {obj.patient.last_name}"
+
+    def is_activity_timeline_visible(self, obj):
+        """
+        Returns True if the activity timeline is to be shown to the current user.
+        """
+        return get_current_role().name == "PSP Executive"
+
+    def id_getval(self, obj):
+        """
+        Returns the formatted ID for display.
+        """
+        return obj.id + 10000
+
+    def patient_getval(self, obj):
+        """
+        Get the value of a patient and generate a link to the patient's detail view.
+
+        Params:
+            self: the instance of the class
+            obj: the object containing patient information
+
+        Returns:
+            str: a string containing a link to the patient's detail view
+        """
+        pat_url = f"/patients/patient/?pk={obj.patient.id}&view=detail&action=render"
+        styles = "color:var(--primary-color) !important;"
+        return f'<a target="_blank" style="{styles}" href="{pat_url}">{obj.patient.__str__()}</a>'
+
+    def doctor_getval(self, obj):
+        """
+        Get the value of a doctor and generate a link to the doctor's detail view.
+
+        Params:
+            self: the instance of the class
+            obj: the object containing doctor information
+
+        Returns:
+            str: a string containing a link to the doctor's detail view
+        """
+        doc_url = f"/doctors/doctor/?pk={obj.doctor.id}&view=detail&action=render"
+        styles = "color:var(--primary-color) !important;"
+        return f'<a target="_blank" style="{styles}" href="{doc_url}">{obj.doctor.__str__()}</a>'
+
+    def hospital_getval(self, obj):
+        """
+        Get the value of a hospital and generate a link to the hospital's detail view.
+
+        Params:
+            self: the instance of the class
+            obj: the object containing hospital information
+
+        Returns:
+            str: a string containing a link to the hospital's detail view
+        """
+        hosp_url = (
+            f"/hospitals/hospital/?pk={obj.hospital.id}&view=detail&action=render"
+        )
+        styles = "color:var(--primary-color) !important;"
+        return f'<a target="_blank" style="{styles}" href="{hosp_url}">{obj.hospital.__str__()}</a>'
+
+Review Guidelines:
+  - Ensure that all required fields have both display_as set accordingly
+  - Verify that the Meta.fields list includes all the fields to be displayed in the detail view
+  - Ensure that the get_title method provides a meaningful title for the detail view
+  - Check that is_activity_timeline_visible correctly determines visibility based on user roles
+  - Verify that <field_name>_getval methods correctly format and display field values, including generating appropriate links
+  - Ensure that the detail view handles data retrieval and display appropriately
+`;
+
+
+/***/ }),
+
+/***/ 73925:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ZANGO_POLICIES = void 0;
+exports.ZANGO_POLICIES = `
+  ## Structure of policies.json
+  {
+    "policies": [
+      {
+        "name": "string",
+        "description": "string",
+        "statement": {
+          "permissions": [
+            {
+              "name": "string",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    ]
+  }
+
+  ## Review Steps
+  1. **Policies Section**:
+    - Verify that each policy has a valid name and description.
+    - Ensure that each policy contains a statement with a permissions array.
+  2. **Permissions Section**:
+    - Verify that each permission within the permissions array has a valid name and type.
+    - Ensure that the name follows the format module.views.ViewName.
+    - Confirm that the type is a valid permission type (e.g., view, edit, delete).
+  3. **General Validation**:
+    - Check that there are no missing or extra fields in the configuration file.
+    - Ensure that the overall structure of the JSON is valid and consistent.
+`;
 
 
 /***/ }),
@@ -155990,7 +156224,291 @@ Zango App Structure:
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ZANGO_WORKFLOW = void 0;
-exports.ZANGO_WORKFLOW = ``;
+exports.ZANGO_WORKFLOW = `
+The Workflow package allows you to define workflows with various status transitions and conditions. It also supports defining tag transitions with enabled and disabled states.
+
+Customization options:
+  - status_transitions: A list of dictionaries that define the transitions between statuses. Each dictionary can include the following keys:
+    - name: Unique name for the transition
+    - display_name: Display name for the transition
+    - description: Description for the transition
+    - form: Form associated with the transition (optional)
+    - from: Initial status for the transition
+    - to: Target status for the transition
+    - confirmation_message: Message to confirm the transition (optional)
+  - tag_transitions: A list of dictionaries that define the transitions for tags. Each dictionary can include the following keys:
+    - name: Unique name for the tag
+    - enabled: Dictionary for the enabled state with the following key:
+      - confirmation_message: Message to confirm enabling the tag (optional)
+    - disabled: Dictionary for the disabled state with the following key:
+      - confirmation_message: Message to confirm disabling the tag (optional)
+  - Conditions and Done Methods:
+    - For each status transition, you can define methods to check conditions and perform actions when the transition is completed.
+    - The condition method should have the following signature:
+      def <transition_name>_condition(self, request, object_instance, **kwargs):
+        # Logic to check condition
+        return <True or False>
+    - The done method should have the following signature:
+      def <transition_name>_done(self, request, object_instance, transaction_obj):
+        # Logic to perform action after transition
+        pass
+  - A class Meta should be added to the Workflow class with the following attributes:
+    - on_create_status: Initial status when the workflow is created
+    - statuses: A dictionary of statuses with their corresponding attributes (color and label)
+    - tags: A list of tuples representing tags and their labels
+
+Example Workflow:
+from zango.core.utils import get_current_role
+from ..packages.workflow.base.engine import WorkflowBase
+from .forms import SubscriptionActiveForm
+
+class SubscriptionsWorkflow(WorkflowBase):
+    status_transitions = [
+        {
+            "name": "open_to_active",
+            "display_name": "Mark Active",
+            "description": "Mark Active",
+            "form": SubscriptionActiveForm,
+            "from": "open",
+            "to": "active",
+        },
+        {
+            "name": "open_to_closed",
+            "display_name": "Mark Closed",
+            "description": "Mark Closed",
+            "confirmation_message": "Are you sure you want to mark this subscription as Closed?",
+            "from": "open",
+            "to": "closed",
+        },
+        {
+            "name": "active_to_inactive",
+            "display_name": "Mark Inactive",
+            "description": "Mark Inactive",
+            "confirmation_message": "Are you sure you want to mark this subscription as Inactive?",
+            "from": "active",
+            "to": "inactive",
+        },
+        {
+            "name": "active_to_closed",
+            "display_name": "Mark Closed",
+            "description": "Mark Closed",
+            "confirmation_message": "Are you sure you want to mark this subscription as Closed?",
+            "from": "active",
+            "to": "closed",
+        },
+        {
+            "name": "inactive_to_active",
+            "display_name": "Mark Active",
+            "description": "Mark Active",
+            "confirmation_message": "Are you sure you want to mark this subscription as Active?",
+            "from": "inactive",
+            "to": "active",
+        },
+        {
+            "name": "inactive_to_closed",
+            "display_name": "Mark Closed",
+            "description": "Mark Closed",
+            "confirmation_message": "Are you sure you want to mark this subscription as Closed?",
+            "from": "inactive",
+            "to": "closed",
+        },
+    ]
+
+    tag_transitions = [
+        {
+            "name": "new",
+            "enabled": {
+                "confirmation_message": "Are you sure you want to mark this contact as New?",
+            },
+            "disabled": {
+                "confirmation_message": "Are you sure you want to demark this contact as New?",
+            },
+        },
+        {
+            "name": "active",
+            "enabled": {
+                "confirmation_message": "Are you sure you want to mark this contact as Active?",
+            },
+            "disabled": {
+                "confirmation_message": "Are you sure you want to demark this contact as Active?",
+            },
+        },
+        {
+            "name": "customer",
+            "enabled": {
+                "confirmation_message": "Are you sure you want to mark this contact as Customer?",
+            },
+            "disabled": {
+                "confirmation_message": "Are you sure you want to demark this contact as Customer?",
+            },
+        },
+        {
+            "name": "follow_up_needed",
+            "enabled": {
+                "confirmation_message": "Are you sure you want to mark this contact as Follow Up Needed?",
+            },
+            "disabled": {
+                "confirmation_message": "Are you sure you want to demark this contact as Follow Up Needed?",
+            },
+        },
+        {
+            "name": "inactive",
+            "enabled": {
+                "confirmation_message": "Are you sure you want to mark this contact as Inactive?",
+            },
+            "disabled": {
+                "confirmation_message": "Are you sure you want to demark this contact as Inactive?",
+            },
+        },
+        {
+            "name": "lost",
+            "enabled": {
+                "confirmation_message": "Are you sure you want to mark this contact as Lost?",
+            },
+            "disabled": {
+                "confirmation_message": "Are you sure you want to demark this contact as Lost?",
+            },
+        },
+        {
+            "name": "do_not_contact",
+            "enabled": {
+                "confirmation_message": "Are you sure you want to mark this contact as Do Not Contact?",
+            },
+            "disabled": {
+                "confirmation_message": "Are you sure you want to demark this contact as Do Not Contact?",
+            },
+        },
+    ]
+
+    def open_to_active_condition(self, request, object_instance, **kwargs):
+        if get_current_role() is not None:
+            has_perm = get_current_role().name in ["Program Manager", "Project Manager"]
+            return (
+                True if has_perm and kwargs.get("current_status") == "open" else False
+            )
+        else:
+            return True
+
+    def open_to_active_done(self, request, object_instance, transaction_obj):
+        object_instance.sub_date_of_first_invoice = transaction_obj.data["form_data"][
+            "sub_date_of_first_invoice"
+        ]
+        object_instance.save()
+        pass
+
+    def active_to_inactive_condition(self, request, object_instance, **kwargs):
+        if get_current_role() is not None:
+            has_perm = get_current_role().name in ["Program Manager", "Project Manager"]
+            return (
+                True if has_perm and kwargs.get("current_status") == "active" else False
+            )
+        else:
+            return True
+
+    def active_to_inactive_done(self, request, object_instance, transaction_obj):
+        pass
+
+    def open_to_closed_condition(self, request, object_instance, **kwargs):
+        if get_current_role() is not None:
+            has_perm = get_current_role().name in [
+                "Project Manager",
+                "Program Manager",
+                "SystemUsers",
+            ]
+            return (
+                True if has_perm and kwargs.get("current_status") == "open" else False
+            )
+        else:
+            return True
+
+    def open_to_closed_done(self, request, object_instance, transaction_obj):
+        pass
+
+    def active_to_closed_condition(self, request, object_instance, **kwargs):
+        if get_current_role() is not None:
+            has_perm = get_current_role().name in [
+                "Project Manager",
+                "Program Manager",
+                "SystemUsers",
+            ]
+            return (
+                True if has_perm and kwargs.get("current_status") == "active" else False
+            )
+        else:
+            return True
+
+    def active_to_closed_done(self, request, object_instance, transaction_obj):
+        pass
+
+    def inactive_to_active_condition(self, request, object_instance, **kwargs):
+        if get_current_role() is not None:
+            has_perm = get_current_role().name in ["Project Manager", "Program Manager"]
+            return (
+                True
+                if has_perm and kwargs.get("current_status") == "inactive"
+                else False
+            )
+        else:
+            return True
+
+    def inactive_to_active_done(self, request, object_instance, transaction_obj):
+        pass
+
+    def inactive_to_closed_condition(self, request, object_instance, **kwargs):
+        if get_current_role() is not None:
+            has_perm = get_current_role().name in [
+                "Project Manager",
+                "Program Manager",
+                "SystemUsers",
+            ]
+            return (
+                True
+                if has_perm and kwargs.get("current_status") == "inactive"
+                else False
+            )
+        else:
+            return True
+
+    def inactive_to_closed_done(self, request, object_instance, transaction_obj):
+        pass
+
+    class Meta:
+        on_create_status = "open"
+        statuses = {
+            "open": {
+                "color": "#FFD800",
+                "label": "Open",
+            },
+            "active": {
+                "color": "#229470",
+                "label": "Active",
+            },
+            "inactive": {
+                "color": "#AA2113",
+                "label": "Inactive",
+            },
+            "closed": {
+                "color": "#808080",
+                "label": "Closed",
+            },
+        }
+        tags = [
+            ("new", "New"),
+            ("active", "Active"),
+            ("customer", "Customer"),
+            ("follow_up_needed", "Follow Up Needed"),
+            ("inactive", "Inactive"),
+            ("lost", "Lost"),
+            ("do_not_contact", "Do Not Contact"),
+        ]
+
+Review Guidelines:
+  - Ensure that all the customization options are being used correctly.
+  - Ensure that each status transition has a corresponding condition and done method.
+  - Verify that the status transitions are defined with the correct keys and values.
+  - Ensure that each tag transition has enabled and disabled states with confirmation messages.
+  - Ensure that the Meta class includes the on_create_status, statuses, and tags attributes with the correct structure.
+`;
 
 
 /***/ }),

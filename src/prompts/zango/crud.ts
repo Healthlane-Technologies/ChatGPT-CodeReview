@@ -316,4 +316,129 @@ Review Guidelines:
 `;
 
 export const ZANGO_CRUD_DETAIL = `
-  `;
+${ZANGO_CRUD_BASE}
+
+Zango Detail Package Documentation
+The Zango Detail package provides a class BaseDetail which can be used to declare and configure detail views.
+
+Customization Options:
+
+  - ModelCol: Used to represent fields from the Zango model in the detail view
+    - display_as: Text to display as the field label
+  - A class Meta should be added to the Detail class with the following attributes:
+    - fields: List defining the fields to be displayed in the detail view
+
+  - Several methods can be overridden to customize the detail view:
+    - get_title: Customize the title of the detail view based on the object
+    - is_activity_timeline_visible: Determine if the activity timeline should be visible to the user
+    - <field_name>_getval: Customize the display value for specific fields, including generating links or formatting data
+
+
+Example Zango Detail:
+
+from zango.core.utils import get_current_role
+from zango.apps.object_store.models import ObjectStore
+from ...appointment.forms import AppointmentForm
+from ...packages.crud.detail.base import BaseDetail
+from ...packages.crud.table.column import ModelCol
+from ...packages.appointments.models import AbstractAppointmentModel
+
+class BasePatientProgramDetail(BaseDetail):
+    id = ModelCol(display_as="ID")
+    patient = ModelCol(display_as="Patient")
+    doctor = ModelCol(display_as="Doctor")
+    hospital = ModelCol(display_as="Clinic")
+    contact_person = ModelCol(display_as="Contact Person")
+    years_since_diagnosis = ModelCol(display_as="Years since Diagnosis")
+    discontinuation_reason = ModelCol(display_as="Discontinuation Reason")
+    discontinuation_date = ModelCol(display_as="Discontinuation Date")
+    consent_date = ModelCol(display_as="Consent Date")
+    consent_file = ModelCol(display_as="Consent File")
+
+    class Meta:
+        fields = [
+            "id",
+            "patient",
+            "doctor",
+            "hospital",
+            "contact_person",
+            "years_since_diagnosis",
+            "discontinuation_reason",
+            "discontinuation_date",
+            "consent_date",
+            "consent_file",
+        ]
+
+    def get_title(self, obj, object_data):
+        """
+        It returns a string that represents the title of the patient program detail view.
+        """
+        return f"Patient Program: {obj.patient.first_name} {obj.patient.last_name}"
+
+    def is_activity_timeline_visible(self, obj):
+        """
+        Returns True if the activity timeline is to be shown to the current user.
+        """
+        return get_current_role().name == "PSP Executive"
+
+    def id_getval(self, obj):
+        """
+        Returns the formatted ID for display.
+        """
+        return obj.id + 10000
+
+    def patient_getval(self, obj):
+        """
+        Get the value of a patient and generate a link to the patient's detail view.
+
+        Params:
+            self: the instance of the class
+            obj: the object containing patient information
+
+        Returns:
+            str: a string containing a link to the patient's detail view
+        """
+        pat_url = f"/patients/patient/?pk={obj.patient.id}&view=detail&action=render"
+        styles = "color:var(--primary-color) !important;"
+        return f'<a target="_blank" style="{styles}" href="{pat_url}">{obj.patient.__str__()}</a>'
+
+    def doctor_getval(self, obj):
+        """
+        Get the value of a doctor and generate a link to the doctor's detail view.
+
+        Params:
+            self: the instance of the class
+            obj: the object containing doctor information
+
+        Returns:
+            str: a string containing a link to the doctor's detail view
+        """
+        doc_url = f"/doctors/doctor/?pk={obj.doctor.id}&view=detail&action=render"
+        styles = "color:var(--primary-color) !important;"
+        return f'<a target="_blank" style="{styles}" href="{doc_url}">{obj.doctor.__str__()}</a>'
+
+    def hospital_getval(self, obj):
+        """
+        Get the value of a hospital and generate a link to the hospital's detail view.
+
+        Params:
+            self: the instance of the class
+            obj: the object containing hospital information
+
+        Returns:
+            str: a string containing a link to the hospital's detail view
+        """
+        hosp_url = (
+            f"/hospitals/hospital/?pk={obj.hospital.id}&view=detail&action=render"
+        )
+        styles = "color:var(--primary-color) !important;"
+        return f'<a target="_blank" style="{styles}" href="{hosp_url}">{obj.hospital.__str__()}</a>'
+
+Review Guidelines:
+  - Ensure that all required fields have both display_as set accordingly
+  - Verify that the Meta.fields list includes all the fields to be displayed in the detail view
+  - Ensure that the get_title method provides a meaningful title for the detail view
+  - Check that is_activity_timeline_visible correctly determines visibility based on user roles
+  - Verify that <field_name>_getval methods correctly format and display field values, including generating appropriate links
+  - Ensure that the detail view handles data retrieval and display appropriately
+`;
