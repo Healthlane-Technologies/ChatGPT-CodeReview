@@ -441,4 +441,6 @@ Review Guidelines:
   - Check that is_activity_timeline_visible correctly determines visibility based on user roles
   - Verify that <field_name>_getval methods correctly format and display field values, including generating appropriate links
   - Ensure that the detail view handles data retrieval and display appropriately
+  - You must use the getFileFromRepo tool to get the code of the models.py file in the same module and verify that all ModelCol fields
+    that are defined are defined correctly
 `;
