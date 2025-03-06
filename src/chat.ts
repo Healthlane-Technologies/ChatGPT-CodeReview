@@ -233,6 +233,8 @@ export class Chat {
         throw new Error('No response received from OpenAI');
       }
 
+      console.log(`Result is ${res}`);
+
       return {
         reviews: res.choices[0].message.parsed,
         fileContent: fileContent
