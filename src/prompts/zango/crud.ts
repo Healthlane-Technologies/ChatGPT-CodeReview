@@ -179,6 +179,9 @@ Review Guidelines
   - If a StringCol is defined a method to get its value must be defined and if searchable is set to True in the StringCol the Q_obj method must be defined to get its value
   - Enusre that the list of fields match the fields defined in the table
   - Ensure that row actions are defined correctly
+  - You must use the getFileFromRepo tool to get the code of the models.py file in the same module and verify that all ModelCol fields
+    that are defined are defined correctly
+    (ex: If the filename is logwork/detail.py, you must try to fetch logwork/models.py)
 `;
 
 export const ZANGO_CRUD_FORM = `
@@ -313,6 +316,9 @@ Review Guidelines:
   - When handling related objects in save(), make sure to handle both creation and deletion
   - Check that __init__ properly initializes dropdown options and default values for existing instances
   - Verify that the form handles validation and data cleaning appropriately
+  - You must use the getFileFromRepo tool to get the code of the models.py file in the same module and verify that all ModelCol fields
+    that are defined are defined correctly
+    (ex: If the filename is logwork/detail.py, you must try to fetch logwork/models.py)
 `;
 
 export const ZANGO_CRUD_DETAIL = `
@@ -443,4 +449,5 @@ Review Guidelines:
   - Ensure that the detail view handles data retrieval and display appropriately
   - You must use the getFileFromRepo tool to get the code of the models.py file in the same module and verify that all ModelCol fields
     that are defined are defined correctly
+    (ex: If the filename is logwork/detail.py, you must try to fetch logwork/models.py)
 `;

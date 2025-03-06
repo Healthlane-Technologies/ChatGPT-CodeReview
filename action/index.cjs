@@ -155230,7 +155230,6 @@ class Chat {
             });
         }
         this.octokit = octokit;
-        globalThis.OctoKitInstance = octokit;
     }
     async generateFileReviewUserPrompt(patch, filename, fileContent, repo, repoOwner, branch) {
         if (fileContent !== "" || fileContent.split("\n").length < 300) {
@@ -155344,17 +155343,18 @@ class Chat {
             }
             const fileRevUserPrompt = await this.generateFileReviewUserPrompt(patch, filename, fileContent, repo, repoOwner, branch);
             const fileRevSysPrompt = await this.getFileReviewSystemPrompt(repoOwner, repo, branch, filename);
-            const res = await this.openai.beta.chat.completions.parse({
-                messages: [
-                    {
-                        role: 'system',
-                        content: fileRevSysPrompt,
-                    },
-                    {
-                        role: 'user',
-                        content: fileRevUserPrompt,
-                    }
-                ],
+            let messages = [
+                {
+                    role: 'system',
+                    content: fileRevSysPrompt,
+                },
+                {
+                    role: 'user',
+                    content: fileRevUserPrompt,
+                }
+            ];
+            const completion = await this.openai.beta.chat.completions.parse({
+                messages: messages,
                 model: process.env.MODEL || 'gpt-4',
                 temperature: +(process.env.temperature || 0.3),
                 top_p: +(process.env.top_p || 0.8),
@@ -155397,14 +155397,47 @@ class Chat {
                         }
                     }],
             });
-            if (!res.choices.length) {
+            if (!completion.choices.length) {
                 throw new Error('No response received from OpenAI');
             }
-            console.log(`Result is ${JSON.stringify(res)}`);
-            return {
-                reviews: res.choices[0].message.parsed,
-                fileContent: fileContent
-            };
+            console.log(`Result is ${JSON.stringify(completion)}`);
+            const resp = completion.choices[0].message;
+            if (resp.tool_calls) {
+                for (const tool_call of resp.tool_calls) {
+                    const function_name = tool_call.function.name;
+                    if (function_name == "getFileFromRepo") {
+                        const function_args = JSON.parse(tool_call.function.arguments);
+                        const function_response = await this.getFileFromRepo(function_args.repo, function_args.owner, function_args.path, function_args.ref);
+                        messages.push(completion.choices[0].message);
+                        messages.push({
+                            role: "tool",
+                            tool_call_id: tool_call.id,
+                            content: function_response
+                        });
+                    }
+                }
+                const completion_with_files = await this.openai.beta.chat.completions.parse({
+                    messages: messages,
+                    model: process.env.MODEL || 'gpt-4',
+                    temperature: +(process.env.temperature || 0.3),
+                    top_p: +(process.env.top_p || 0.8),
+                    max_tokens: process.env.max_tokens ? +process.env.max_tokens : 2000,
+                    response_format: (0, zod_1.zodResponseFormat)(FileReviews, "FileReviewResponse"),
+                });
+                if (!completion_with_files.choices.length) {
+                    throw new Error('No response received from OpenAI');
+                }
+                return {
+                    reviews: completion_with_files.choices[0].message.parsed,
+                    fileContent: fileContent
+                };
+            }
+            else {
+                return {
+                    reviews: completion.choices[0].message.parsed,
+                    fileContent: fileContent
+                };
+            }
         }
         catch (error) {
             console.error('OpenAI API request failed:', error);
@@ -155419,7 +155452,7 @@ class Chat {
             throw new Error('Changed files information is required');
         }
         const prSumUserPrompt = this.generatePRSummaryUserPrompt(changedFiles);
-        const res = await this.openai.chat.completions.create({
+        const completion = await this.openai.chat.completions.create({
             messages: [
                 {
                     role: 'system',
@@ -155435,13 +155468,13 @@ class Chat {
             top_p: +(process.env.top_p || 0.8),
             max_tokens: process.env.max_tokens ? +process.env.max_tokens : 2000,
         });
-        return res.choices[0]?.message?.content || '';
+        return completion.choices[0]?.message?.content || '';
     }
     async getCommitReviewsSummary(fileReviews) {
         if (!fileReviews) {
             throw new Error('File reviews are required');
         }
-        const res = await this.openai.chat.completions.create({
+        const completion = await this.openai.chat.completions.create({
             messages: [
                 {
                     role: 'system',
@@ -155457,7 +155490,7 @@ class Chat {
             top_p: +(process.env.top_p || 0.8),
             max_tokens: process.env.max_tokens ? +process.env.max_tokens : 2000,
         });
-        return res.choices[0]?.message?.content || '';
+        return completion.choices[0]?.message?.content || '';
     }
     async getFileFromRepo(path, owner, repo, ref) {
         try {
@@ -155482,30 +155515,6 @@ class Chat {
     }
 }
 exports.Chat = Chat;
-// @ts-ignore
-async function getFileFromRepo(path, owner, repo, ref) {
-    console.log("Getting file using tool call");
-    try {
-        const { data } = await globalThis.OctokitInstance.repos.getContent({
-            owner,
-            repo,
-            path,
-            ref,
-        });
-        // Check if data is an array (directory) or not a file
-        if (Array.isArray(data) || !('content' in data)) {
-            throw new Error('Requested path is not a file');
-        }
-        // Decode the base64 content
-        const content = Buffer.from(data.content, 'base64').toString('utf-8');
-        return content;
-    }
-    catch (error) {
-        console.error("Error fetching file:", error);
-        throw error;
-    }
-}
-;
 
 
 /***/ }),
@@ -155877,6 +155886,9 @@ Review Guidelines
   - If a StringCol is defined a method to get its value must be defined and if searchable is set to True in the StringCol the Q_obj method must be defined to get its value
   - Enusre that the list of fields match the fields defined in the table
   - Ensure that row actions are defined correctly
+  - You must use the getFileFromRepo tool to get the code of the models.py file in the same module and verify that all ModelCol fields
+    that are defined are defined correctly
+    (ex: If the filename is logwork/detail.py, you must try to fetch logwork/models.py)
 `;
 exports.ZANGO_CRUD_FORM = `
 ${ZANGO_CRUD_BASE}
@@ -156010,6 +156022,9 @@ Review Guidelines:
   - When handling related objects in save(), make sure to handle both creation and deletion
   - Check that __init__ properly initializes dropdown options and default values for existing instances
   - Verify that the form handles validation and data cleaning appropriately
+  - You must use the getFileFromRepo tool to get the code of the models.py file in the same module and verify that all ModelCol fields
+    that are defined are defined correctly
+    (ex: If the filename is logwork/detail.py, you must try to fetch logwork/models.py)
 `;
 exports.ZANGO_CRUD_DETAIL = `
 ${ZANGO_CRUD_BASE}
@@ -156139,6 +156154,7 @@ Review Guidelines:
   - Ensure that the detail view handles data retrieval and display appropriately
   - You must use the getFileFromRepo tool to get the code of the models.py file in the same module and verify that all ModelCol fields
     that are defined are defined correctly
+    (ex: If the filename is logwork/detail.py, you must try to fetch logwork/models.py)
 `;
 
 

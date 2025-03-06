@@ -1,5 +1,6 @@
 import { OpenAI, AzureOpenAI } from 'openai';
 import { zodResponseFormat } from "openai/helpers/zod";
+import { ChatCompletionMessageParam } from 'openai/resources';
 import { z } from "zod";
 import { FileReviewPrompt, GetPrSummaryPrompt, GetCommitReviewSummaryPrompt } from './prompts/main';
 import { ZANGO, ZANGO_SETTINGS } from './prompts/zango/zango';
@@ -11,6 +12,13 @@ import { ZELTHY1_CONTEXT, ZELTHY1_REVIEW_GUIDELINES } from './prompts/zelthy/pro
 import { ZELTHY1_APP_STRUCTURE } from './prompts/zelthy/structure';
 import { ProbotOctokit } from 'probot';
 import { basename } from 'path';
+
+type GetFileFromRepoArgs = {
+  path: string;
+  owner: string;
+  repo: string;
+  ref: string;
+};
 
 const FileReview = z.object({
   review: z.string(),
@@ -55,7 +63,6 @@ export class Chat {
     }
 
     this.octokit = octokit;
-    (globalThis as any).OctoKitInstance = octokit;
   }
 
   private async generateFileReviewUserPrompt(patch: string, filename: string, fileContent: string, repo: string, repoOwner: string, branch: string): Promise<string> {
@@ -175,17 +182,20 @@ export class Chat {
       }
       const fileRevUserPrompt = await this.generateFileReviewUserPrompt(patch, filename, fileContent, repo, repoOwner, branch);
       const fileRevSysPrompt = await this.getFileReviewSystemPrompt(repoOwner, repo, branch, filename);
-      const res = await this.openai.beta.chat.completions.parse({
-        messages: [
-          {
-            role: 'system',
-            content: fileRevSysPrompt,
-          },
-          {
-            role: 'user',
-            content: fileRevUserPrompt,
-          }
-        ],
+
+      let messages: ChatCompletionMessageParam[] = [
+        {
+          role: 'system',
+          content: fileRevSysPrompt,
+        },
+        {
+          role: 'user',
+          content: fileRevUserPrompt,
+        }
+      ];
+
+      const completion = await this.openai.beta.chat.completions.parse({
+        messages: messages,
         model: process.env.MODEL || 'gpt-4',
         temperature: +(process.env.temperature || 0.3),
         top_p: +(process.env.top_p || 0.8),
@@ -229,16 +239,56 @@ export class Chat {
         }],
       });
 
-      if (!res.choices.length) {
+      if (!completion.choices.length) {
         throw new Error('No response received from OpenAI');
       }
 
-      console.log(`Result is ${JSON.stringify(res)}`);
+      console.log(`Result is ${JSON.stringify(completion)}`);
 
-      return {
-        reviews: res.choices[0].message.parsed,
-        fileContent: fileContent
-      };
+      const resp = completion.choices[0].message;
+      if (resp.tool_calls) {
+        for (const tool_call of resp.tool_calls) {
+          const function_name = tool_call.function.name
+          if (function_name == "getFileFromRepo") {
+            const function_args = JSON.parse(tool_call.function.arguments) as GetFileFromRepoArgs;
+            const function_response = await this.getFileFromRepo(
+              function_args.repo,
+              function_args.owner,
+              function_args.path,
+              function_args.ref,
+            );
+            messages.push(
+              completion.choices[0].message
+            );
+            messages.push({                               // append result message
+                role: "tool",
+                tool_call_id: tool_call.id,
+                content: function_response
+            });
+          }
+        }
+
+        const completion_with_files = await this.openai.beta.chat.completions.parse({
+          messages: messages,
+          model: process.env.MODEL || 'gpt-4',
+          temperature: +(process.env.temperature || 0.3),
+          top_p: +(process.env.top_p || 0.8),
+          max_tokens: process.env.max_tokens ? +process.env.max_tokens : 2000,
+          response_format: zodResponseFormat(FileReviews, "FileReviewResponse"),
+        });
+        if (!completion_with_files.choices.length) {
+          throw new Error('No response received from OpenAI');
+        }
+        return {
+          reviews: completion_with_files.choices[0].message.parsed,
+          fileContent: fileContent
+        };
+      } else {
+        return {
+          reviews: completion.choices[0].message.parsed,
+          fileContent: fileContent
+        };
+      }
     } catch (error) {
       console.error('OpenAI API request failed:', error);
       throw new Error(`Failed to process request: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -253,7 +303,7 @@ export class Chat {
     }
 
     const prSumUserPrompt = this.generatePRSummaryUserPrompt(changedFiles);
-    const res = await this.openai.chat.completions.create({
+    const completion = await this.openai.chat.completions.create({
       messages: [
         {
           role: 'system',
@@ -270,7 +320,7 @@ export class Chat {
       max_tokens: process.env.max_tokens ? +process.env.max_tokens : 2000,
     });
 
-    return res.choices[0]?.message?.content || '';
+    return completion.choices[0]?.message?.content || '';
   }
 
   public async getCommitReviewsSummary(fileReviews: string): Promise<string> {
@@ -278,7 +328,7 @@ export class Chat {
       throw new Error('File reviews are required');
     }
 
-    const res = await this.openai.chat.completions.create({
+    const completion = await this.openai.chat.completions.create({
       messages: [
         {
           role: 'system',
@@ -295,7 +345,7 @@ export class Chat {
       max_tokens: process.env.max_tokens ? +process.env.max_tokens : 2000,
     });
 
-    return res.choices[0]?.message?.content || '';
+    return completion.choices[0]?.message?.content || '';
   }
 
   public async getFileFromRepo(
@@ -326,34 +376,3 @@ export class Chat {
     }
   }
 }
-
-// @ts-ignore
-async function getFileFromRepo(
-  path: string,
-  owner: string,
-  repo: string,
-  ref: string
-  ): Promise<string> {
-
-    console.log("Getting file using tool call")
-  try {
-    const { data } = await (globalThis as any).OctokitInstance.repos.getContent({
-      owner,
-      repo,
-      path,
-      ref,
-    });
-
-  // Check if data is an array (directory) or not a file
-    if (Array.isArray(data) || !('content' in data)) {
-    throw new Error('Requested path is not a file');
-    }
-
-    // Decode the base64 content
-    const content = Buffer.from(data.content, 'base64').toString('utf-8');
-    return content;
-    } catch (error) {
-    console.error("Error fetching file:", error);
-    throw error;
-  }
-};
