@@ -332,6 +332,8 @@ async function getFileFromRepo(
   repo: string,
   ref: string
   ): Promise<string> {
+
+    console.log("Getting file using tool call")
   try {
     const { data } = await (globalThis as any).OctokitInstance.repos.getContent({
       owner,
